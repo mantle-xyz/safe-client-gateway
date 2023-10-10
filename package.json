@@ -1,5 +1,6 @@
 {
   "name": "safe-client-gateway",
+  "version": "1.9.0",
   "description": "",
   "private": true,
   "license": "MIT",
