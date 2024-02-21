@@ -188,6 +188,9 @@ export default () => ({
       8453: { nativeCoin: 'ethereum', chainName: 'base' },
       84531: { nativeCoin: 'ethereum', chainName: 'base' },
       84532: { nativeCoin: 'ethereum', chainName: 'base' },
+      5000: { nativeCoin: 'mantle', chainName: 'mantle' },
+      5001: { nativeCoin: 'mantle', chainName: 'mantle' },
+      5003: { nativeCoin: 'mantle', chainName: 'mantle' },
     },
   },
   redis: {
