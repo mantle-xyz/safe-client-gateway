@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, DefaultValuePipe, Get, Param, Query } from '@nestjs/common';
 import { BalancesService } from './balances.service';
 import { Balances } from './entities/balances.entity';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
@@ -18,7 +18,7 @@ export class BalancesController {
     @Param('safeAddress') safeAddress: string,
     @Param('fiatCode') fiatCode: string,
     @Query('trusted') trusted?: boolean,
-    @Query('exclude_spam') excludeSpam?: boolean,
+    @Query('exclude_spam', new DefaultValuePipe(true)) excludeSpam?: boolean,
   ): Promise<Balances> {
     return this.balancesService.getBalances({
       chainId,
