@@ -1,5 +1,5 @@
-import { Operation } from './operation.entity';
-import { DataDecoded } from '../../data-decoder/entities/data-decoded.entity';
+import { DataDecoded } from '@/domain/data-decoder/entities/data-decoded.entity';
+import { Operation } from '@/domain/safe/entities/operation.entity';
 
 export interface Confirmation {
   owner: string;
@@ -14,7 +14,7 @@ export type MultisigTransaction = {
   blockNumber: number | null;
   confirmations: Confirmation[] | null;
   confirmationsRequired: number;
-  data: string | null; // TODO: replace with DataDecoded entity
+  data: string | null;
   dataDecoded: DataDecoded | null;
   ethGasPrice: string | null;
   executionDate: Date | null;
@@ -29,6 +29,7 @@ export type MultisigTransaction = {
   nonce: number;
   operation: Operation;
   origin: string | null;
+  proposer: string | null;
   refundReceiver: string | null;
   safe: string;
   safeTxGas: number | null;

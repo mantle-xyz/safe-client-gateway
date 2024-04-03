@@ -8,34 +8,34 @@ import { SafeRepository } from '@/domain/safe/safe.repository';
 import { tokenBuilder } from '@/domain/tokens/__tests__/token.builder';
 import { TokenRepository } from '@/domain/tokens/token.repository';
 import { ILoggingService } from '@/logging/logging.interface';
-import { addressInfoBuilder } from '../../../common/__tests__/entities/address-info.builder';
-import { AddressInfoHelper } from '../../../common/address-info/address-info.helper';
-import { NULL_ADDRESS } from '../../../common/constants';
-import { AddressInfo } from '../../../common/entities/address-info.entity';
-import { MultisigConfirmationDetails } from '../../entities/transaction-details/multisig-execution-details.entity';
-import { MultisigTransactionExecutionDetailsMapper } from './multisig-transaction-execution-details.mapper';
+import { addressInfoBuilder } from '@/routes/common/__tests__/entities/address-info.builder';
+import { AddressInfoHelper } from '@/routes/common/address-info/address-info.helper';
+import { NULL_ADDRESS } from '@/routes/common/constants';
+import { AddressInfo } from '@/routes/common/entities/address-info.entity';
+import { MultisigConfirmationDetails } from '@/routes/transactions/entities/transaction-details/multisig-execution-details.entity';
+import { MultisigTransactionExecutionDetailsMapper } from '@/routes/transactions/mappers/multisig-transactions/multisig-transaction-execution-details.mapper';
 
 const addressInfoHelper = jest.mocked({
   getOrDefault: jest.fn(),
-} as unknown as AddressInfoHelper);
+} as jest.MockedObjectDeep<AddressInfoHelper>);
 
 const tokenRepository = jest.mocked({
   getToken: jest.fn(),
-} as unknown as TokenRepository);
+} as jest.MockedObjectDeep<TokenRepository>);
 
 const safeRepository = jest.mocked({
   getMultisigTransactions: jest.fn(),
-} as unknown as SafeRepository);
+} as jest.MockedObjectDeep<SafeRepository>);
 
 const loggingService = jest.mocked({
   debug: jest.fn(),
-} as unknown as ILoggingService);
+} as jest.MockedObjectDeep<ILoggingService>);
 
 describe('MultisigTransactionExecutionDetails mapper (Unit)', () => {
   let mapper: MultisigTransactionExecutionDetailsMapper;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mapper = new MultisigTransactionExecutionDetailsMapper(
       addressInfoHelper,
       tokenRepository,
@@ -83,6 +83,7 @@ describe('MultisigTransactionExecutionDetails mapper (Unit)', () => {
         rejectors: [],
         gasTokenInfo,
         trusted: transaction.trusted,
+        proposer: new AddressInfo(transaction.proposer!),
       }),
     );
   });
@@ -146,6 +147,7 @@ describe('MultisigTransactionExecutionDetails mapper (Unit)', () => {
         rejectors: expectedRejectors,
         gasTokenInfo: null,
         trusted: transaction.trusted,
+        proposer: new AddressInfo(transaction.proposer!),
       }),
     );
   });
@@ -211,6 +213,36 @@ describe('MultisigTransactionExecutionDetails mapper (Unit)', () => {
         rejectors: expectedRejectors,
         gasTokenInfo: null,
         trusted: transaction.trusted,
+        proposer: new AddressInfo(transaction.proposer!),
+      }),
+    );
+  });
+
+  it('should return a MultisigExecutionDetails object with no proposer if not present', async () => {
+    const chainId = faker.string.numeric();
+    const safe = safeBuilder().build();
+    const transaction = multisigTransactionBuilder()
+      .with('safe', safe.address)
+      .with('proposer', null)
+      .build();
+    const addressInfo = addressInfoBuilder().build();
+    addressInfoHelper.getOrDefault.mockResolvedValue(addressInfo);
+    safeRepository.getMultisigTransactions.mockResolvedValue(
+      pageBuilder<MultisigTransaction>().with('results', []).build(),
+    );
+    const gasTokenInfo = tokenBuilder().build();
+    tokenRepository.getToken.mockResolvedValue(gasTokenInfo);
+
+    const actual = await mapper.mapMultisigExecutionDetails(
+      chainId,
+      transaction,
+      safe,
+    );
+
+    expect(actual).toEqual(
+      expect.objectContaining({
+        type: 'MULTISIG',
+        proposer: null,
       }),
     );
   });

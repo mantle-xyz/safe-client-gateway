@@ -1,7 +1,6 @@
 import { faker } from '@faker-js/faker';
-import { range } from 'lodash';
-import { CacheDir } from '../entities/cache-dir.entity';
-import { FakeCacheService } from './fake.cache.service';
+import { FakeCacheService } from '@/datasources/cache/__tests__/fake.cache.service';
+import { CacheDir } from '@/datasources/cache/entities/cache-dir.entity';
 
 describe('FakeCacheService', () => {
   let target: FakeCacheService;
@@ -17,30 +16,40 @@ describe('FakeCacheService', () => {
     );
     const value = faker.string.alphanumeric();
 
-    await target.set(cacheDir, value, 0);
+    await target.set(cacheDir, value, faker.number.int({ min: 1 }));
 
     await expect(target.get(cacheDir)).resolves.toBe(value);
     expect(target.keyCount()).toBe(1);
   });
 
-  it('deletes key', async () => {
+  it('deletes key and sets invalidationTimeMs', async () => {
+    jest.useFakeTimers();
+    const now = jest.now();
     const key = faker.string.alphanumeric();
     const field = faker.string.alphanumeric();
     const cacheDir = new CacheDir(key, field);
     const value = faker.string.alphanumeric();
 
-    await target.set(cacheDir, value, 0);
+    await target.set(cacheDir, value, faker.number.int({ min: 1 }));
     await target.deleteByKey(key);
 
     await expect(target.get(cacheDir)).resolves.toBe(undefined);
-    expect(target.keyCount()).toBe(0);
+    await expect(
+      target.get(new CacheDir(`invalidationTimeMs:${cacheDir.key}`, '')),
+    ).resolves.toBe(now.toString());
+    expect(target.keyCount()).toBe(1);
+    jest.useRealTimers();
   });
 
   it('clears keys', async () => {
     const actions: Promise<void>[] = [];
     for (let i = 0; i < 5; i++) {
       actions.push(
-        target.set(new CacheDir(`key${i}`, `field${i}`), `value${i}`, 0),
+        target.set(
+          new CacheDir(`key${i}`, `field${i}`),
+          `value${i}`,
+          faker.number.int({ min: 1 }),
+        ),
       );
     }
 
@@ -50,47 +59,31 @@ describe('FakeCacheService', () => {
     expect(target.keyCount()).toBe(0);
   });
 
-  it('deletes keys by pattern', async () => {
-    const prefix = faker.word.sample();
-    // insert 5 items matching the pattern
-    await Promise.all(
-      range(5).map(() =>
-        target.set(new CacheDir(`${prefix}${faker.string.uuid()}`, ''), ''),
-      ),
-    );
-    // insert 4 items not matching the pattern
-    await Promise.all(
-      range(4).map(() =>
-        target.set(new CacheDir(`${faker.string.uuid()}`, ''), ''),
-      ),
-    );
+  it('creates a missing key and increments its value', async () => {
+    const key = faker.string.alphanumeric();
+    const firstResult = await target.increment(key, undefined);
+    expect(firstResult).toEqual(1);
 
-    await target.deleteByKeyPattern(`${prefix}*`);
+    const results: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      results.push(await target.increment(key, undefined));
+    }
 
-    expect(target.keyCount()).toBe(4);
+    expect(results).toEqual([2, 3, 4, 5, 6]);
   });
 
-  it('deletes keys by pattern (2)', async () => {
-    const prefix = faker.word.sample();
-    const suffix = faker.word.sample();
-    // insert 5 items matching the pattern
-    await Promise.all(
-      range(5).map(() =>
-        target.set(
-          new CacheDir(`${prefix}_${faker.string.uuid()}_${suffix}`, ''),
-          '',
-        ),
-      ),
-    );
-    // insert 4 items not matching the pattern
-    await Promise.all(
-      range(4).map(() =>
-        target.set(new CacheDir(`${faker.string.uuid()}`, ''), ''),
-      ),
+  it('increments the value of an existing key', async () => {
+    const key = faker.string.alphanumeric();
+    const initialValue = faker.number.int({ min: 100 });
+    await target.set(
+      new CacheDir(key, ''),
+      initialValue,
+      faker.number.int({ min: 1 }),
     );
 
-    await target.deleteByKeyPattern(`${prefix}_*_${suffix}`);
-
-    expect(target.keyCount()).toBe(4);
+    for (let i = 1; i <= 5; i++) {
+      const result = await target.increment(key, undefined);
+      expect(result).toEqual(initialValue + i);
+    }
   });
 });

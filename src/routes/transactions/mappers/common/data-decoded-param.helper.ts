@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { isArray } from 'lodash';
 import { DataDecoded } from '@/domain/data-decoder/entities/data-decoded.entity';
-import { DELEGATE_OPERATION } from '@/domain/safe/entities/operation.entity';
+import { Operation } from '@/domain/safe/entities/operation.entity';
 
 @Injectable()
 export class DataDecodedParamHelper {
@@ -72,9 +71,9 @@ export class DataDecodedParamHelper {
     if (!dataDecoded.parameters) return false;
     return dataDecoded.parameters.some(
       (param) =>
-        isArray(param.valueDecoded) &&
+        Array.isArray(param.valueDecoded) &&
         param.valueDecoded.some(
-          (innerParam) => innerParam?.operation === DELEGATE_OPERATION,
+          (innerParam) => innerParam?.operation === Operation.DELEGATE,
         ),
     );
   }

@@ -6,35 +6,41 @@ import { TestCacheModule } from '@/datasources/cache/__tests__/test.cache.module
 import { TestNetworkModule } from '@/datasources/network/__tests__/test.network.module';
 import { chainBuilder } from '@/domain/chains/entities/__tests__/chain.builder';
 import { TestLoggingModule } from '@/logging/__tests__/test.logging.module';
-import { ConfigurationModule } from '@/config/configuration.module';
-import configuration from '../../config/entities/__tests__/configuration';
+import configuration from '@/config/entities/__tests__/configuration';
 import { IConfigurationService } from '@/config/configuration.service.interface';
 import { CacheDir } from '@/datasources/cache/entities/cache-dir.entity';
 import { FakeCacheService } from '@/datasources/cache/__tests__/fake.cache.service';
 import { CacheService } from '@/datasources/cache/cache.service.interface';
-import { AppModule, configurationModule } from '@/app.module';
+import { AppModule } from '@/app.module';
 import { CacheModule } from '@/datasources/cache/cache.module';
 import { RequestScopedLoggingModule } from '@/logging/logging.module';
 import { NetworkModule } from '@/datasources/network/network.module';
-import { NetworkService } from '@/datasources/network/network.service.interface';
+import {
+  INetworkService,
+  NetworkService,
+} from '@/datasources/network/network.service.interface';
+import { AccountDataSourceModule } from '@/datasources/account/account.datasource.module';
+import { TestAccountDataSourceModule } from '@/datasources/account/__tests__/test.account.datasource.module';
+import { getAddress } from 'viem';
 
 describe('Post Hook Events (Unit)', () => {
   let app: INestApplication;
-  let authToken;
-  let safeConfigUrl;
+  let authToken: string;
+  let safeConfigUrl: string;
   let fakeCacheService: FakeCacheService;
-  let networkService;
+  let networkService: jest.MockedObjectDeep<INetworkService>;
+  let configurationService: IConfigurationService;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule.register(configuration)],
     })
+      .overrideModule(AccountDataSourceModule)
+      .useModule(TestAccountDataSourceModule)
       .overrideModule(CacheModule)
       .useModule(TestCacheModule)
-      .overrideModule(configurationModule)
-      .useModule(ConfigurationModule.register(configuration))
       .overrideModule(RequestScopedLoggingModule)
       .useModule(TestLoggingModule)
       .overrideModule(NetworkModule)
@@ -43,9 +49,9 @@ describe('Post Hook Events (Unit)', () => {
     app = moduleFixture.createNestApplication();
 
     fakeCacheService = moduleFixture.get<FakeCacheService>(CacheService);
-    const configurationService = moduleFixture.get(IConfigurationService);
-    authToken = configurationService.get('auth.token');
-    safeConfigUrl = configurationService.get('safeConfig.baseUri');
+    configurationService = moduleFixture.get(IConfigurationService);
+    authToken = configurationService.getOrThrow('auth.token');
+    safeConfigUrl = configurationService.getOrThrow('safeConfig.baseUri');
     networkService = moduleFixture.get(NetworkService);
 
     await app.init();
@@ -63,6 +69,11 @@ describe('Post Hook Events (Unit)', () => {
   });
 
   it.each([
+    {
+      type: 'DELETED_MULTISIG_TRANSACTION',
+      address: faker.finance.ethereumAddress(),
+      safeTxHash: faker.string.hexadecimal({ length: 32 }),
+    },
     {
       type: 'EXECUTED_MULTISIG_TRANSACTION',
       address: faker.finance.ethereumAddress(),
@@ -132,11 +143,12 @@ describe('Post Hook Events (Unit)', () => {
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -147,7 +159,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
   });
 
   it('returns 400 (Bad Request) on unknown payload', async () => {
@@ -155,11 +167,12 @@ describe('Post Hook Events (Unit)', () => {
       type: 'SOME_TEST_TYPE_THAT_WE_DO_NOT_SUPPORT',
       safeTxHash: 'some-safe-tx-hash',
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/1`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', '1').build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -170,7 +183,29 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(400);
+      .expect(422)
+      .expect({
+        statusCode: 422,
+        code: 'invalid_union_discriminator',
+        options: [
+          'CHAIN_UPDATE',
+          'DELETED_MULTISIG_TRANSACTION',
+          'EXECUTED_MULTISIG_TRANSACTION',
+          'INCOMING_ETHER',
+          'INCOMING_TOKEN',
+          'MESSAGE_CREATED',
+          'MODULE_TRANSACTION',
+          'NEW_CONFIRMATION',
+          'MESSAGE_CONFIRMATION',
+          'OUTGOING_ETHER',
+          'OUTGOING_TOKEN',
+          'PENDING_MULTISIG_TRANSACTION',
+          'SAFE_APPS_UPDATE',
+        ],
+        path: ['type'],
+        message:
+          "Invalid discriminator value. Expected 'CHAIN_UPDATE' | 'DELETED_MULTISIG_TRANSACTION' | 'EXECUTED_MULTISIG_TRANSACTION' | 'INCOMING_ETHER' | 'INCOMING_TOKEN' | 'MESSAGE_CREATED' | 'MODULE_TRANSACTION' | 'NEW_CONFIRMATION' | 'MESSAGE_CONFIRMATION' | 'OUTGOING_ETHER' | 'OUTGOING_TOKEN' | 'PENDING_MULTISIG_TRANSACTION' | 'SAFE_APPS_UPDATE'",
+      });
   });
 
   it.each([
@@ -196,22 +231,31 @@ describe('Post Hook Events (Unit)', () => {
     },
   ])('$type clears balances', async (payload) => {
     const safeAddress = faker.finance.ethereumAddress();
-    const chainId = faker.string.numeric();
+    const chainId = faker.string.numeric({
+      exclude: configurationService.getOrThrow(
+        'features.zerionBalancesChainIds',
+      ),
+    });
     const cacheDir = new CacheDir(
-      `${chainId}_balances_${safeAddress}`,
+      `${chainId}_safe_balances_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -222,7 +266,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -240,26 +284,35 @@ describe('Post Hook Events (Unit)', () => {
     {
       type: 'NEW_CONFIRMATION',
       owner: faker.finance.ethereumAddress(),
+      safeTxHash: faker.string.hexadecimal({ length: 32 }),
+    },
+    {
+      type: 'DELETED_MULTISIG_TRANSACTION',
       safeTxHash: faker.string.hexadecimal({ length: 32 }),
     },
   ])('$type clears multisig transactions', async (payload) => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_multisig_transactions_${safeAddress}`,
+      `${chainId}_multisig_transactions_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -270,7 +323,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -288,6 +341,10 @@ describe('Post Hook Events (Unit)', () => {
     {
       type: 'NEW_CONFIRMATION',
       owner: faker.finance.ethereumAddress(),
+      safeTxHash: faker.string.hexadecimal({ length: 32 }),
+    },
+    {
+      type: 'DELETED_MULTISIG_TRANSACTION',
       safeTxHash: faker.string.hexadecimal({ length: 32 }),
     },
   ])('$type clears multisig transaction', async (payload) => {
@@ -297,17 +354,22 @@ describe('Post Hook Events (Unit)', () => {
       `${chainId}_multisig_transaction_${payload.safeTxHash}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -318,7 +380,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -329,24 +391,34 @@ describe('Post Hook Events (Unit)', () => {
       safeTxHash: faker.string.hexadecimal({ length: 32 }),
       txHash: faker.string.hexadecimal({ length: 32 }),
     },
+    {
+      type: 'MODULE_TRANSACTION',
+      module: faker.finance.ethereumAddress(),
+      txHash: faker.string.hexadecimal({ length: 32 }),
+    },
   ])('$type clears safe info', async (payload) => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_safe_${safeAddress}`,
+      `${chainId}_safe_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -357,7 +429,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -380,22 +452,31 @@ describe('Post Hook Events (Unit)', () => {
     },
   ])('$type clears safe collectibles', async (payload) => {
     const safeAddress = faker.finance.ethereumAddress();
-    const chainId = faker.string.numeric();
+    const chainId = faker.string.numeric({
+      exclude: configurationService.getOrThrow(
+        'features.zerionBalancesChainIds',
+      ),
+    });
     const cacheDir = new CacheDir(
-      `${chainId}_collectibles_${safeAddress}`,
+      `${chainId}_safe_collectibles_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -406,7 +487,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -431,20 +512,25 @@ describe('Post Hook Events (Unit)', () => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_transfers_${safeAddress}`,
+      `${chainId}_transfers_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -455,7 +541,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -475,20 +561,25 @@ describe('Post Hook Events (Unit)', () => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_incoming_transfers_${safeAddress}`,
+      `${chainId}_incoming_transfers_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -499,7 +590,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -514,20 +605,25 @@ describe('Post Hook Events (Unit)', () => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_module_transactions_${safeAddress}`,
+      `${chainId}_module_transactions_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -538,7 +634,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -578,20 +674,25 @@ describe('Post Hook Events (Unit)', () => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_all_transactions_${safeAddress}`,
+      `${chainId}_all_transactions_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -602,7 +703,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -620,20 +721,25 @@ describe('Post Hook Events (Unit)', () => {
     const safeAddress = faker.finance.ethereumAddress();
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(
-      `${chainId}_messages_${safeAddress}`,
+      `${chainId}_messages_${getAddress(safeAddress)}`,
       faker.string.alpha(),
     );
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       address: safeAddress,
       chainId: chainId,
       ...payload,
     };
-    networkService.get.mockImplementation((url) => {
+    networkService.get.mockImplementation(({ url }) => {
       switch (url) {
         case `${safeConfigUrl}/api/v1/chains/${chainId}`:
           return Promise.resolve({
             data: chainBuilder().with('chainId', chainId).build(),
+            status: 200,
           });
         default:
           return Promise.reject(new Error(`Could not match ${url}`));
@@ -644,7 +750,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -656,7 +762,11 @@ describe('Post Hook Events (Unit)', () => {
   ])('$type clears chain', async (payload) => {
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(`${chainId}_chain`, '');
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       chainId: chainId,
       ...payload,
@@ -666,7 +776,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -678,7 +788,11 @@ describe('Post Hook Events (Unit)', () => {
   ])('$type clears chains', async (payload) => {
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(`chains`, '');
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       chainId: chainId,
       ...payload,
@@ -688,7 +802,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });
@@ -700,7 +814,11 @@ describe('Post Hook Events (Unit)', () => {
   ])('$type clears safe apps', async (payload) => {
     const chainId = faker.string.numeric();
     const cacheDir = new CacheDir(`${chainId}_safe_apps`, '');
-    await fakeCacheService.set(cacheDir, faker.string.alpha());
+    await fakeCacheService.set(
+      cacheDir,
+      faker.string.alpha(),
+      faker.number.int({ min: 1 }),
+    );
     const data = {
       chainId: chainId,
       ...payload,
@@ -710,7 +828,7 @@ describe('Post Hook Events (Unit)', () => {
       .post(`/hooks/events`)
       .set('Authorization', `Basic ${authToken}`)
       .send(data)
-      .expect(200);
+      .expect(202);
 
     await expect(fakeCacheService.get(cacheDir)).resolves.toBeUndefined();
   });

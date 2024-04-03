@@ -1,6 +1,4 @@
-import { EventPayload, EventType } from './event-payload.entity';
+import { OutgoingEtherEventSchema } from '@/routes/cache-hooks/entities/schemas/outgoing-ether.schema';
+import { z } from 'zod';
 
-export interface OutgoingEther extends EventPayload<EventType.OUTGOING_ETHER> {
-  txHash: string;
-  value: string;
-}
+export type OutgoingEther = z.infer<typeof OutgoingEtherEventSchema>;

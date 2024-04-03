@@ -1,5 +1,5 @@
 import { Schema } from 'ajv';
-import { buildPageSchema } from '../../../entities/schemas/page.schema.factory';
+import { buildPageSchema } from '@/domain/entities/schemas/page.schema.factory';
 
 export const CONFIRMATION_SCHEMA_ID =
   'https://safe-client.safe.global/schemas/safe/confirmation.json';
@@ -42,6 +42,7 @@ export const multisigTransactionSchema: Schema = {
     safeTxGas: { type: 'number', nullable: true, default: null },
     baseGas: { type: 'number', nullable: true, default: null },
     gasPrice: { type: 'string', nullable: true, default: null },
+    proposer: { type: 'string', nullable: true, default: null },
     refundReceiver: { type: 'string', nullable: true, default: null },
     nonce: { type: 'number' },
     executionDate: {

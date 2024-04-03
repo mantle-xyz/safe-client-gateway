@@ -1,13 +1,12 @@
-import { Balance } from '../balance.entity';
-import { faker } from '@faker-js/faker';
 import { Builder, IBuilder } from '@/__tests__/builder';
+import { faker } from '@faker-js/faker';
 import { balanceTokenBuilder } from './balance.token.builder';
+import { Balance } from '@/domain/balances/entities/balance.entity';
+import { getAddress } from 'viem';
 
 export function balanceBuilder(): IBuilder<Balance> {
-  return Builder.new<Balance>()
-    .with('tokenAddress', faker.finance.ethereumAddress())
+  return new Builder<Balance>()
+    .with('tokenAddress', getAddress(faker.finance.ethereumAddress()))
     .with('token', balanceTokenBuilder().build())
-    .with('balance', faker.string.numeric())
-    .with('fiatBalance', faker.string.numeric())
-    .with('fiatConversion', faker.string.numeric());
+    .with('balance', faker.string.numeric());
 }

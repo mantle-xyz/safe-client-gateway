@@ -1,4 +1,4 @@
-import { DataDecoded } from './entities/data-decoded.entity';
+import { DataDecoded } from '@/domain/data-decoder/entities/data-decoded.entity';
 
 export const IDataDecodedRepository = Symbol('IDataDecodedRepository');
 
@@ -9,7 +9,7 @@ export interface IDataDecodedRepository {
    */
   getDataDecoded(args: {
     chainId: string;
-    data: string;
-    to: string;
+    data: `0x${string}`;
+    to?: `0x${string}`;
   }): Promise<DataDecoded>;
 }

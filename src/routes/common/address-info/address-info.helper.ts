@@ -3,8 +3,8 @@ import { ContractsRepository } from '@/domain/contracts/contracts.repository';
 import { IContractsRepository } from '@/domain/contracts/contracts.repository.interface';
 import { TokenRepository } from '@/domain/tokens/token.repository';
 import { ITokenRepository } from '@/domain/tokens/token.repository.interface';
-import { AddressInfo } from '../entities/address-info.entity';
 import { ILoggingService, LoggingService } from '@/logging/logging.interface';
+import { AddressInfo } from '@/routes/common/entities/address-info.entity';
 
 export type Source = 'CONTRACT' | 'TOKEN';
 
@@ -100,7 +100,10 @@ export class AddressInfoHelper {
       case 'CONTRACT':
         return this.contractsRepository
           .getContract({ chainId, contractAddress: address })
-          .then((c) => new AddressInfo(c.address, c.displayName, c.logoUri));
+          .then(
+            (c) =>
+              new AddressInfo(c.address, c.displayName, c.logoUri ?? undefined),
+          );
       case 'TOKEN':
         return this.tokenRepository
           .getToken({ chainId, address })

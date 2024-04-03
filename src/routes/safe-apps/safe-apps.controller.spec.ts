@@ -10,30 +10,34 @@ import { SafeAppAccessControlPolicies } from '@/domain/safe-apps/entities/safe-a
 import { safeAppAccessControlBuilder } from '@/domain/safe-apps/entities/__tests__/safe-app-access-control.builder';
 import { safeAppBuilder } from '@/domain/safe-apps/entities/__tests__/safe-app.builder';
 import { TestLoggingModule } from '@/logging/__tests__/test.logging.module';
-import { ConfigurationModule } from '@/config/configuration.module';
-import configuration from '../../config/entities/__tests__/configuration';
+import configuration from '@/config/entities/__tests__/configuration';
 import { IConfigurationService } from '@/config/configuration.service.interface';
-import { AppModule, configurationModule } from '@/app.module';
+import { AppModule } from '@/app.module';
 import { CacheModule } from '@/datasources/cache/cache.module';
 import { RequestScopedLoggingModule } from '@/logging/logging.module';
 import { NetworkModule } from '@/datasources/network/network.module';
-import { NetworkService } from '@/datasources/network/network.service.interface';
+import {
+  INetworkService,
+  NetworkService,
+} from '@/datasources/network/network.service.interface';
+import { AccountDataSourceModule } from '@/datasources/account/account.datasource.module';
+import { TestAccountDataSourceModule } from '@/datasources/account/__tests__/test.account.datasource.module';
 
 describe('Safe Apps Controller (Unit)', () => {
   let app: INestApplication;
-  let safeConfigUrl;
-  let networkService;
+  let safeConfigUrl: string;
+  let networkService: jest.MockedObjectDeep<INetworkService>;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule.register(configuration)],
     })
+      .overrideModule(AccountDataSourceModule)
+      .useModule(TestAccountDataSourceModule)
       .overrideModule(CacheModule)
       .useModule(TestCacheModule)
-      .overrideModule(configurationModule)
-      .useModule(ConfigurationModule.register(configuration))
       .overrideModule(RequestScopedLoggingModule)
       .useModule(TestLoggingModule)
       .overrideModule(NetworkModule)
@@ -73,10 +77,10 @@ describe('Safe Apps Controller (Unit)', () => {
           )
           .build(),
       ];
-      networkService.get.mockImplementation((url) => {
+      networkService.get.mockImplementation(({ url }) => {
         const getSafeAppsUrl = `${safeConfigUrl}/api/v1/safe-apps/`;
         if (url === getSafeAppsUrl) {
-          return Promise.resolve({ data: safeAppsResponse });
+          return Promise.resolve({ data: safeAppsResponse, status: 200 });
         }
         return Promise.reject(new Error(`Could not match ${url}`));
       });
@@ -95,7 +99,12 @@ describe('Safe Apps Controller (Unit)', () => {
             provider: safeAppsResponse[0].provider,
             accessControl: {
               type: 'DOMAIN_ALLOWLIST',
-              value: safeAppsResponse[0].accessControl.value,
+              value: (
+                safeAppsResponse[0].accessControl as {
+                  value: string[] | null;
+                  type: SafeAppAccessControlPolicies.DomainAllowlist;
+                }
+              ).value,
             },
             tags: safeAppsResponse[0].tags,
             features: safeAppsResponse[0].features,
@@ -110,7 +119,10 @@ describe('Safe Apps Controller (Unit)', () => {
             description: safeAppsResponse[1].description,
             chainIds: safeAppsResponse[1].chainIds.map((c) => c.toString()),
             provider: safeAppsResponse[1].provider,
-            accessControl: { type: 'NO_RESTRICTIONS' },
+            accessControl: {
+              type: 'NO_RESTRICTIONS',
+              value: null,
+            },
             tags: safeAppsResponse[1].tags,
             features: safeAppsResponse[1].features,
             developerWebsite: safeAppsResponse[1].developerWebsite,
@@ -122,7 +134,7 @@ describe('Safe Apps Controller (Unit)', () => {
     it('Success with UNKNOWN accessControl', async () => {
       const chain = chainBuilder().build();
       const safeAppsResponse = [safeAppBuilder().build()];
-      networkService.get.mockImplementation((url) => {
+      networkService.get.mockImplementation(({ url }) => {
         const getSafeAppsUrl = `${safeConfigUrl}/api/v1/safe-apps/`;
         if (url === getSafeAppsUrl) {
           return Promise.resolve({
@@ -130,11 +142,12 @@ describe('Safe Apps Controller (Unit)', () => {
               {
                 ...safeAppsResponse[0],
                 accessControl: {
-                  type: faker.word.sample(),
-                  value: safeAppsResponse[0].accessControl.value,
+                  type: 'UNKNOWN',
+                  value: null,
                 },
               },
             ],
+            status: 200,
           });
         }
         return Promise.reject(new Error(`Could not match ${url}`));
@@ -152,7 +165,10 @@ describe('Safe Apps Controller (Unit)', () => {
             description: safeAppsResponse[0].description,
             chainIds: safeAppsResponse[0].chainIds.map((c) => c.toString()),
             provider: safeAppsResponse[0].provider,
-            accessControl: { type: 'UNKNOWN' },
+            accessControl: {
+              type: 'UNKNOWN',
+              value: null,
+            },
             tags: safeAppsResponse[0].tags,
             features: safeAppsResponse[0].features,
             developerWebsite: safeAppsResponse[0].developerWebsite,
@@ -179,10 +195,10 @@ describe('Safe Apps Controller (Unit)', () => {
           .build(),
       ];
 
-      networkService.get.mockImplementation((url) => {
+      networkService.get.mockImplementation(({ url }) => {
         const getSafeAppsUrl = `${safeConfigUrl}/api/v1/safe-apps/`;
         if (url === getSafeAppsUrl) {
-          return Promise.resolve({ data: safeAppsResponse });
+          return Promise.resolve({ data: safeAppsResponse, status: 200 });
         }
         return Promise.reject(new Error(`Could not match ${url}`));
       });
@@ -191,9 +207,8 @@ describe('Safe Apps Controller (Unit)', () => {
         .get(`/v1/chains/${chain.chainId}/safe-apps`)
         .expect(500)
         .expect({
-          message: 'Validation failed',
-          code: 42,
-          arguments: [],
+          statusCode: 500,
+          message: 'Internal server error',
         });
     });
   });

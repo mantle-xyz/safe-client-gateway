@@ -1,6 +1,6 @@
-import { EventPayload, EventType } from './event-payload.entity';
+import { NewMessageConfirmationEventSchema } from '@/routes/cache-hooks/entities/schemas/new-message-confirmation.schema';
+import { z } from 'zod';
 
-export interface NewMessageConfirmation
-  extends EventPayload<EventType.MESSAGE_CONFIRMATION> {
-  messageHash: string;
-}
+export type NewMessageConfirmation = z.infer<
+  typeof NewMessageConfirmationEventSchema
+>;

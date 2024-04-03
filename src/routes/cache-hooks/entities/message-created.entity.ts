@@ -1,6 +1,4 @@
-import { EventPayload, EventType } from './event-payload.entity';
+import { MessageCreatedEventSchema } from '@/routes/cache-hooks/entities/schemas/message-created.schema';
+import { z } from 'zod';
 
-export interface MessageCreated
-  extends EventPayload<EventType.MESSAGE_CREATED> {
-  messageHash: string;
-}
+export type MessageCreated = z.infer<typeof MessageCreatedEventSchema>;

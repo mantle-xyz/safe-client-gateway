@@ -1,7 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Token } from '../../../balances/entities/token.entity';
-import { AddressInfo } from '../../../common/entities/address-info.entity';
-import { ExecutionDetails } from './execution-details.entity';
+import { AddressInfo } from '@/routes/common/entities/address-info.entity';
+import { Token } from '@/routes/balances/entities/token.entity';
+import {
+  ExecutionDetails,
+  ExecutionDetailsType,
+} from '@/routes/transactions/entities/transaction-details/execution-details.entity';
 
 export class MultisigConfirmationDetails {
   @ApiProperty()
@@ -53,6 +56,8 @@ export class MultisigExecutionDetails extends ExecutionDetails {
   gasTokenInfo: Token | null;
   @ApiProperty()
   trusted: boolean;
+  @ApiPropertyOptional({ type: AddressInfo, nullable: true })
+  proposer!: AddressInfo | null;
 
   constructor(
     submittedAt: number,
@@ -70,8 +75,9 @@ export class MultisigExecutionDetails extends ExecutionDetails {
     rejectors: AddressInfo[],
     gasTokenInfo: Token | null,
     trusted: boolean,
+    proposer: AddressInfo | null,
   ) {
-    super('MULTISIG');
+    super(ExecutionDetailsType.Multisig);
     this.submittedAt = submittedAt;
     this.nonce = nonce;
     this.safeTxGas = safeTxGas;
@@ -87,5 +93,6 @@ export class MultisigExecutionDetails extends ExecutionDetails {
     this.rejectors = rejectors;
     this.gasTokenInfo = gasTokenInfo;
     this.trusted = trusted;
+    this.proposer = proposer;
   }
 }

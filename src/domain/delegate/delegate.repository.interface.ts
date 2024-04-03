@@ -1,5 +1,5 @@
-import { Page } from '../entities/page.entity';
-import { Delegate } from './entities/delegate.entity';
+import { Delegate } from '@/domain/delegate/entities/delegate.entity';
+import { Page } from '@/domain/entities/page.entity';
 
 export const IDelegateRepository = Symbol('IDelegateRepository');
 
@@ -16,11 +16,11 @@ export interface IDelegateRepository {
 
   postDelegate(args: {
     chainId: string;
-    safeAddress?: string;
-    delegate?: string;
-    delegator?: string;
-    signature?: string;
-    label?: string;
+    safeAddress: `0x${string}` | null;
+    delegate: `0x${string}`;
+    delegator: `0x${string}`;
+    signature: string;
+    label: string;
   }): Promise<void>;
 
   deleteDelegate(args: {
@@ -35,5 +35,5 @@ export interface IDelegateRepository {
     delegate: string;
     safeAddress: string;
     signature: string;
-  }): Promise<void>;
+  }): Promise<unknown>;
 }

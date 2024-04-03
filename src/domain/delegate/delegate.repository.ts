@@ -1,16 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ITransactionApiManager } from '../interfaces/transaction-api.manager.interface';
-import { IDelegateRepository } from './delegate.repository.interface';
-import { Delegate } from './entities/delegate.entity';
-import { Page } from '../entities/page.entity';
-import { DelegateValidator } from './delegate.validator';
+import { IDelegateRepository } from '@/domain/delegate/delegate.repository.interface';
+import { Delegate } from '@/domain/delegate/entities/delegate.entity';
+import { Page } from '@/domain/entities/page.entity';
+import { ITransactionApiManager } from '@/domain/interfaces/transaction-api.manager.interface';
+import { DelegateSchema } from '@/domain/delegate/entities/schemas/delegate.schema';
 
 @Injectable()
 export class DelegateRepository implements IDelegateRepository {
   constructor(
     @Inject(ITransactionApiManager)
     private readonly transactionApiManager: ITransactionApiManager,
-    private readonly delegateValidator: DelegateValidator,
   ) {}
 
   async getDelegates(args: {
@@ -33,17 +32,17 @@ export class DelegateRepository implements IDelegateRepository {
       offset: args.offset,
     });
 
-    page?.results.map((result) => this.delegateValidator.validate(result));
+    page?.results.map((result) => DelegateSchema.parse(result));
     return page;
   }
 
   async postDelegate(args: {
     chainId: string;
-    safeAddress?: string;
-    delegate?: string;
-    delegator?: string;
-    signature?: string;
-    label?: string;
+    safeAddress: `0x${string}` | null;
+    delegate: `0x${string}`;
+    delegator: `0x${string}`;
+    signature: string;
+    label: string;
   }): Promise<void> {
     const transactionService =
       await this.transactionApiManager.getTransactionApi(args.chainId);
@@ -76,7 +75,7 @@ export class DelegateRepository implements IDelegateRepository {
     delegate: string;
     safeAddress: string;
     signature: string;
-  }): Promise<void> {
+  }): Promise<unknown> {
     const transactionService =
       await this.transactionApiManager.getTransactionApi(args.chainId);
     return transactionService.deleteSafeDelegate({

@@ -6,13 +6,13 @@ import { ISafeRepository } from '@/domain/safe/safe.repository.interface';
 import { TokenRepository } from '@/domain/tokens/token.repository';
 import { ITokenRepository } from '@/domain/tokens/token.repository.interface';
 import { ILoggingService, LoggingService } from '@/logging/logging.interface';
-import { AddressInfoHelper } from '../../../common/address-info/address-info.helper';
-import { NULL_ADDRESS } from '../../../common/constants';
-import { AddressInfo } from '../../../common/entities/address-info.entity';
+import { AddressInfoHelper } from '@/routes/common/address-info/address-info.helper';
+import { NULL_ADDRESS } from '@/routes/common/constants';
+import { AddressInfo } from '@/routes/common/entities/address-info.entity';
 import {
   MultisigConfirmationDetails,
   MultisigExecutionDetails,
-} from '../../entities/transaction-details/multisig-execution-details.entity';
+} from '@/routes/transactions/entities/transaction-details/multisig-execution-details.entity';
 
 @Injectable()
 export class MultisigTransactionExecutionDetailsMapper {
@@ -42,6 +42,9 @@ export class MultisigTransactionExecutionDetailsMapper {
               confirmation.submissionDate.getTime(),
             ),
         );
+    const proposer = transaction.proposer
+      ? new AddressInfo(transaction.proposer)
+      : null;
 
     const [gasTokenInfo, executor, refundReceiver, rejectors] =
       await Promise.all([
@@ -77,6 +80,7 @@ export class MultisigTransactionExecutionDetailsMapper {
       rejectors,
       gasTokenInfo,
       transaction.trusted,
+      proposer,
     );
   }
 

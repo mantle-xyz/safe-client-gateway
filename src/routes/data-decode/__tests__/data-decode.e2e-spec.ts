@@ -1,31 +1,32 @@
 import { faker } from '@faker-js/faker';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { RedisClientType } from 'redis';
 import * as request from 'supertest';
 import { AppModule } from '@/app.module';
 import { TestAppProvider } from '@/__tests__/test-app.provider';
 import { DataDecoded } from '@/domain/data-decoder/entities/data-decoded.entity';
-import { redisClientFactory } from '@/__tests__/redis-client.factory';
-import { getDataDecodedDtoBuilder } from '../entities/__tests__/get-data-decoded.dto.builder';
+import { getDataDecodedDtoBuilder } from '@/routes/data-decode/entities/__tests__/get-data-decoded.dto.builder';
+import { CacheKeyPrefix } from '@/datasources/cache/constants';
 
 describe('Data decode e2e tests', () => {
   let app: INestApplication;
-  let redisClient: RedisClientType;
-  const chainId = '5'; // Görli testnet
+  const chainId = '1'; // Mainnet
 
   beforeAll(async () => {
+    const cacheKeyPrefix = crypto.randomUUID();
     const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+      imports: [AppModule.register()],
+    })
+      .overrideProvider(CacheKeyPrefix)
+      .useValue(cacheKeyPrefix)
+      .compile();
 
     app = await new TestAppProvider().provide(moduleRef);
     await app.init();
-    redisClient = await redisClientFactory();
   });
 
-  beforeEach(async () => {
-    await redisClient.flushAll();
+  afterAll(async () => {
+    await app.close();
   });
 
   it('POST /data-decoder', async () => {
@@ -163,8 +164,15 @@ describe('Data decode e2e tests', () => {
     await request(app.getHttpServer())
       .post(`/v1/chains/${chainId}/data-decoder`)
       .send({ ...getDataDecodedDto, to: faker.number.int() })
-      .expect(400)
-      .expect({ message: 'Validation failed', code: 42, arguments: [] });
+      .expect(422)
+      .expect({
+        statusCode: 422,
+        code: 'invalid_type',
+        expected: 'string',
+        received: 'number',
+        path: ['to'],
+        message: 'Expected string, received number',
+      });
   });
 
   it('POST /data-decoder should throw a validation error (2)', async () => {
@@ -173,13 +181,12 @@ describe('Data decode e2e tests', () => {
     await request(app.getHttpServer())
       .post(`/v1/chains/${chainId}/data-decoder`)
       .send({ ...getDataDecodedDto, to: faker.string.alphanumeric() })
-      .expect(400)
-      .expect({ message: 'Validation failed', code: 42, arguments: [] });
-  });
-
-  afterAll(async () => {
-    await app.close();
-    await redisClient.flushAll();
-    await redisClient.quit();
+      .expect(422)
+      .expect({
+        statusCode: 422,
+        code: 'custom',
+        path: ['to'],
+        message: 'Invalid input',
+      });
   });
 });
