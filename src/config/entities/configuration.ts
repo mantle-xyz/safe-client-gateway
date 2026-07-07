@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
 import type { RelayRules } from '@/modules/relay/domain/entities/relay.configuration';
 
 // Custom configuration for the application
@@ -5,7 +6,7 @@ import type { RelayRules } from '@/modules/relay/domain/entities/relay.configura
 export default () => ({
   about: {
     name: 'safe-client-gateway',
-    version: process.env.APPLICATION_VERSION || 'v1.101.0',
+    version: process.env.APPLICATION_VERSION || 'v1.102.0',
     buildNumber: process.env.APPLICATION_BUILD_NUMBER,
   },
   amqp: {
@@ -486,6 +487,7 @@ export default () => ({
         process.env.SAFE_CONFIG_SAFES_MAX_SEQUENTIAL_PAGES ?? `${10}`,
       ),
     },
+    cgwServiceKey: process.env.SAFE_CONFIG_CGW_KEY || 'CGW',
   },
   safeDataDecoder: {
     baseUri:

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: FSL-1.1-MIT
 import { fakeJson } from '@/__tests__/faker';
 import configurationValidator from '@/config/configuration.validator';
 import { RootConfigurationSchema } from '@/config/entities/schemas/configuration.schema';
@@ -28,9 +29,6 @@ describe('Configuration validator', () => {
     EMAIL_API_APPLICATION_CODE: faker.string.alphanumeric(),
     EMAIL_API_FROM_EMAIL: faker.internet.email(),
     EMAIL_API_KEY: faker.string.uuid(),
-    EMAIL_TEMPLATE_RECOVERY_TX: faker.string.alphanumeric(),
-    EMAIL_TEMPLATE_UNKNOWN_RECOVERY_TX: faker.string.alphanumeric(),
-    EMAIL_TEMPLATE_VERIFICATION_CODE: faker.string.alphanumeric(),
     EXPIRATION_DEVIATE_PERCENT: faker.number.int({ min: 0, max: 100 }),
     FINGERPRINT_ENCRYPTION_KEY: faker.string.uuid(),
     INFURA_API_KEY: faker.string.uuid(),
@@ -108,9 +106,6 @@ describe('Configuration validator', () => {
     { key: 'EMAIL_API_APPLICATION_CODE' },
     { key: 'EMAIL_API_FROM_EMAIL' },
     { key: 'EMAIL_API_KEY' },
-    { key: 'EMAIL_TEMPLATE_RECOVERY_TX' },
-    { key: 'EMAIL_TEMPLATE_UNKNOWN_RECOVERY_TX' },
-    { key: 'EMAIL_TEMPLATE_VERIFICATION_CODE' },
     { key: 'FINGERPRINT_ENCRYPTION_KEY' },
     { key: 'INFURA_API_KEY' },
     { key: 'JWT_ISSUER' },
@@ -175,9 +170,6 @@ describe('Configuration validator', () => {
       EMAIL_API_APPLICATION_CODE: faker.string.alphanumeric(),
       EMAIL_API_FROM_EMAIL: faker.internet.email(),
       EMAIL_API_KEY: faker.string.uuid(),
-      EMAIL_TEMPLATE_RECOVERY_TX: faker.string.alphanumeric(),
-      EMAIL_TEMPLATE_UNKNOWN_RECOVERY_TX: faker.string.alphanumeric(),
-      EMAIL_TEMPLATE_VERIFICATION_CODE: faker.string.alphanumeric(),
       EXPIRATION_DEVIATE_PERCENT: faker.number.int({ min: 0, max: 100 }),
       FINGERPRINT_ENCRYPTION_KEY: faker.string.uuid(),
       INFURA_API_KEY: faker.string.uuid(),
@@ -246,9 +238,6 @@ describe('Configuration validator', () => {
       EMAIL_API_APPLICATION_CODE: faker.string.alphanumeric(),
       EMAIL_API_FROM_EMAIL: faker.internet.email(),
       EMAIL_API_KEY: faker.string.uuid(),
-      EMAIL_TEMPLATE_RECOVERY_TX: faker.string.alphanumeric(),
-      EMAIL_TEMPLATE_UNKNOWN_RECOVERY_TX: faker.string.alphanumeric(),
-      EMAIL_TEMPLATE_VERIFICATION_CODE: faker.string.alphanumeric(),
       EXPIRATION_DEVIATE_PERCENT: faker.number.int({ min: 0, max: 100 }),
       FINGERPRINT_ENCRYPTION_KEY: faker.string.uuid(),
       INFURA_API_KEY: faker.string.uuid(),
@@ -440,6 +429,37 @@ describe('Configuration validator', () => {
           ),
         );
       });
+    });
+  });
+
+  describe('SAFE_CONFIG_CGW_KEY', () => {
+    it('should accept a valid SAFE_CONFIG_CGW_KEY', () => {
+      process.env.NODE_ENV = 'production';
+      const config = {
+        ...validConfiguration,
+        SAFE_CONFIG_CGW_KEY: 'custom-cgw-key',
+      };
+      expect(() =>
+        configurationValidator(config, RootConfigurationSchema),
+      ).not.toThrow();
+    });
+
+    it('should accept missing SAFE_CONFIG_CGW_KEY (optional)', () => {
+      process.env.NODE_ENV = 'production';
+      const config = omit(validConfiguration, 'SAFE_CONFIG_CGW_KEY');
+      expect(() =>
+        configurationValidator(config, RootConfigurationSchema),
+      ).not.toThrow();
+    });
+
+    it('should reject empty SAFE_CONFIG_CGW_KEY', () => {
+      process.env.NODE_ENV = 'production';
+      const config = { ...validConfiguration, SAFE_CONFIG_CGW_KEY: '' };
+      expect(() =>
+        configurationValidator(config, RootConfigurationSchema),
+      ).toThrow(
+        'Configuration is invalid: SAFE_CONFIG_CGW_KEY Too small: expected string to have >=1 characters',
+      );
     });
   });
 });

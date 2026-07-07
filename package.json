@@ -31,7 +31,12 @@
     "migration:create": "node --env-file=.env -r tsconfig-paths/register ./node_modules/typeorm/cli migration:create ./migrations/${0}",
     "migration:generate": "yarn typeorm migration:generate ./migrations/${0}",
     "migration:run": "yarn typeorm migration:run",
-    "migration:revert": "yarn typeorm migration:revert"
+    "migration:revert": "yarn typeorm migration:revert",
+    "env:validate": "ts-node scripts/validate-env-json.ts",
+    "env:validate:silent": "ts-node scripts/validate-env-json.ts --silent",
+    "env:generate": "ts-node scripts/generate-env.ts",
+    "env:generate:force": "ts-node scripts/generate-env.ts --force",
+    "env:generate:update": "ts-node scripts/generate-env.ts --update"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "3.1022.0",
@@ -42,10 +47,10 @@
     "@fingerprintjs/fingerprintjs-pro-server-api": "6.10.0",
     "@nestjs/bullmq": "^11.0.3",
     "@nestjs/cache-manager": "3.0.1",
-    "@nestjs/common": "11.1.12",
+    "@nestjs/common": "11.1.14",
     "@nestjs/config": "^4.0.4",
-    "@nestjs/core": "11.1.12",
-    "@nestjs/platform-express": "11.1.12",
+    "@nestjs/core": "11.1.14",
+    "@nestjs/platform-express": "11.1.14",
     "@nestjs/schedule": "6.0.0",
     "@nestjs/serve-static": "5.0.4",
     "@nestjs/swagger": "^11.3.2",
@@ -60,7 +65,7 @@
     "jsonwebtoken": "9.0.3",
     "lodash": "4.18.1",
     "nestjs-cls": "6.0.1",
-    "pg": "8.14.1",
+    "pg": "8.18.0",
     "postgres": "3.4.7",
     "redis": "5.10.0",
     "reflect-metadata": "0.2.2",
@@ -73,17 +78,17 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@faker-js/faker": "10.2.0",
+    "@faker-js/faker": "10.3.0",
     "@nestjs/cli": "11.0.17",
     "@nestjs/schematics": "11.0.5",
-    "@nestjs/testing": "11.1.12",
+    "@nestjs/testing": "11.1.14",
     "@smithy/util-stream": "4.5.5",
     "@types/amqplib": "0",
     "@types/cookie-parser": "1.4.8",
     "@types/express": "5.0.6",
     "@types/jest": "29.5.14",
     "@types/jsonwebtoken": "9",
-    "@types/lodash": "4.17.18",
+    "@types/lodash": "4.17.24",
     "@types/node": "25.3.3",
     "@types/sanitize-html": "2",
     "@types/semver": "7.7.0",
@@ -104,7 +109,11 @@
     "typescript-eslint": "8.31.1"
   },
   "resolutions": {
-    "@isaacs/brace-expansion": "^5.0.1"
+    "qs": "6.15.1",
+    "handlebars": "4.7.9",
+    "flatted": "3.4.2",
+    "brace-expansion@^1.1.7": "1.1.13",
+    "lodash": "4.18.1"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -125,7 +134,8 @@
     ],
     "roots": [
       "./src",
-      "./migrations"
+      "./migrations",
+      "./scripts"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
